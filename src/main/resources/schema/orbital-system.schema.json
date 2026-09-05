@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jaxfam/orbit/schema/orbital-system.schema.json",
+  "title": "OrbitalSystem",
+  "description": "A complete initial (or current) state of an Orbit simulation: integration parameters plus every body's position, velocity, size, density, color, and optional name. Written by OrbitalSystem.saveToFile() and read by OrbitalSystem.loadFromFile(); the R key reloads and runs whatever this file currently holds.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional self-reference to this schema, for editor validation/autocomplete"
+    },
+    "dt": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Integration time step, seconds"
+    },
+    "trailLength": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 200,
+      "description": "Number of past positions each body remembers for its trailing path"
+    },
+    "trailDecimation": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 2,
+      "description": "Simulation steps between recorded trail points"
+    },
+    "enforceRadiusLimit": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether bodies that stray past 3x maxRadiusAU from the origin are culled"
+    },
+    "maxRadiusAU": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 1000.0,
+      "description": "Reference system radius, AU; escape-culling threshold is 3x this"
+    },
+    "bodies": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/body" }
+    }
+  },
+  "required": ["dt", "bodies"],
+  "additionalProperties": false,
+  "$defs": {
+    "body": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Optional display name, e.g. \"Earth\"; omitted for unnamed bodies"
+        },
+        "positionAU": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[X, Y] inertial position of center-of-mass, astronomical units"
+        },
+        "velocityMS": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[U, V] inertial velocity of center-of-mass, meters/second"
+        },
+        "radiusEarthRadii": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Sphere radius, Earth radii"
+        },
+        "densityGCm3": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Density, g/cm^3 (water = 1.0)"
+        },
+        "color": {
+          "type": "array",
+          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "[red, green, blue], each 0.0-1.0"
+        }
+      },
+      "required": ["positionAU", "velocityMS", "radiusEarthRadii", "densityGCm3", "color"],
+      "additionalProperties": false
+    }
+  }
+}

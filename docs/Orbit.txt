@@ -1,0 +1,152 @@
+//
+// Source file for the Orbit Java program
+// Formatted for AsciiDoc by Bruce Jackson.
+// AsciiDoc available from http://www.methods.co.nz/asciidoc
+//
+// Generate HTML file:
+//    asciidoc Orbit.txt
+//
+
+Orbit Java Program
+===================
+:doctype: article
+:icons:
+:toc:
+:data-uri:
+:version: 1.0
+:author: Bruce Jackson, bruce@jaxfam.org
+:eqndpi: 200
+
+
+This document describes the 'Orbit' program, written in Java, for use in seeing the role of calculus in everyday physical simulations. The program demonstrates orbital motion in two dimensions for either an arbitrary (random) selection of spherical masses of various sizes, or for the Solar System's dynamics starting from an arbitrary initial condition.
+
+Underlying Physics
+------------------
+
+Two masses (in this case very, very large masses of the planetary bodies) are attracted to each other by a force that can be expressed as
+
+// PDF version
+ifdef::formatpdf[]
+[latexmath]
++++++
+\[F = G \frac{m_1 m_2}{R^2}\]
++++++
+
+where latexmath:[$F$] is force, latexmath:[$G$] is the 'gravitational constant' (*not* the Earth's gravity), latexmath:[$m_1$] and latexmath:[$m_2$] are the two masses, and latexmath:[$R$] is the distance between the two masses.
+
+image::images/gravity.png[height=150]
+
+The value of the gravitational constant, latexmath:[$G$], is 
+
+latexmath:[$6.672\times 10^{11}$] N m^2^ per kg^2^. 
+
+endif::formatpdf[]
+
+
+// HTML version
+ifndef::formatpdf[]
+["latex","ex3_1a.png",{eqndpi}]
+$F = G \frac{m_1 m_2}{R^2}$
+
+where *_F_* is force, *_G_* is the 'gravitational constant' (*not* Earth's gravity), *_m_*~1~ and *_m_*~2~ are the two masses, and  *_R_* is the distance between the two masses.
+
+image::images/gravity.png[height=200]
+
+The value of the gravitational constant, *_G_*, is 
+
+["latex","ex3_1b.png",{eqndpi}]
+$G = 6.672\times 10^{11}$ N m\textsuperscript{2} per kg\textsuperscript{2}.
+
+endif::formatpdf[]
+
+This is a tiny, tiny number, and explains why trashcans don't leap off the ground and attack even relatively large masses like yours truly.
+
+
+Numerical Integration
+---------------------
+
+The acceleration of each planetary body is a result of the sum of the gravitational attraction to each other body divided by its own mass; the Sun is by far the largest and thus most influential, but the Moon (for example) is more strongly attracted to the Earth due to the relative proximity of the two.
+
+To split the acceleration into two dimensions (X and Y) we can use the fact that the portion of force in either dimension is proportional to the ratio of distance in that dimension to total distance:
+
+// PDF version
+ifdef::formatpdf[]
+[latexmath]
+++++++
+\[\frac{F_x}{F} = \frac{R_x}{R}\]
+\[F_x = \frac{R_x F}{R}\]
+++++++
+endif::formatpdf[]
+
+// HTML version
+ifndef::formatpdf[]
+["latex","ex3_2a.png",{eqndpi}]
+$\frac{F_x}{F} = \frac{R_x}{R}$
+
+["latex","ex3_2b.png",{eqndpi}]
+$F_x = \frac{R_x F}{R}$
+endif::formatpdf[]
+
+and we can quickly arrive at equations of motion in both the X and Y dimensions using Euler's method numerical integration
+
+// PDF version
+ifdef::formatpdf[]
+[latexmath]
++++++
+\[\ddot{x} = F_x/m\]
+\[\ddot{x} = \frac{R_x}{F}\frac{R}{m}\]
+\[\dot{x} = \int{\ddot{x}\delta t}\]
+\[x = \int{\dot{x}\delta t}\]
++++++
+endif::formatpdf[]
+
+// HTML version
+ifndef::formatpdf[]
+["latex","ex3_2c.png",{eqndpi}]
+$ \\
+\ddot{x} = F_x/m \\
+\ddot{x} = \frac{R_x}{F}\frac{R}{m} \\
+\dot{x} = \int{\ddot{x}\delta t} \\
+x = \int{\dot{x}\delta t}$
+endif::formatpdf[]
+
+and in the Y dimension:
+
+// PDF version
+ifdef::formatpdf[]
+[latexmath]
++++++
+\[\ddot{y} = F_y/m\]
+\[\ddot{y} = \frac{R_y}{F}\frac{R}{m}\]
+\[\dot{y} = \int{\ddot{y}\delta t}\]
+\[y = \int{\dot{y}\delta t}\]
++++++
+endif::formatpdf[]
+
+// HTML version
+ifndef::formatpdf[]
+["latex","ex3_2d.png",{eqndpi}]
+$ \\
+\ddot{y} = F_y/m \\
+\ddot{y} = \frac{R_y}{F}\frac{R}{m} \\
+\dot{y} = \int{\ddot{y}\delta t} \\
+y = \int{\dot{y}\delta t}$
+endif::formatpdf[]
+
+
+Running the program
+-------------------
+
+The executable program is found in Orbit.jar, but before it can run, a third-party open-source program (the Lightweight Java Graphics Library, lwjgl) needs to be installed in the appropriate place on the computer.
+
+See the README.html file for installation instructions.
+
+Once the installation is complete, the program can be run by double-clicking the Orbit.jar file.
+
+
+Modifying the program
+---------------------
+
+Modifications to the random objects orbital system must be made in the source code, found in the 'src' folder of the distribution package.  We used the open-source NetBeans integrated development environment (IDE) to develop this program, but any other Java development system can be used, including a simple text editor.  Describing how to implement these tools to do Java development is outside the scope of this document.
+
+The necessary parameters to change the number, size, distribution, density and volume of the random system can be adjusted in the Orbit.java main class, found in the src/main/java/org/jaxfam/orbit folder.

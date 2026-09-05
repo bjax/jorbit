@@ -1,0 +1,104 @@
+<?xml version="1.0" standalone="yes"?>
+<!DOCTYPE PlanetarySystem [
+  <!ELEMENT PlanetarySystem (Body+)>
+  <!ELEMENT Body (OrbitalRadius, Mass, Diameter, Color)>
+  <!ATTLIST Body name   ID    #REQUIRED
+                 MoonOf IDREF #IMPLIED>			<!-- MoonOf is just a hint about which body to circularize -->
+  <!ELEMENT OrbitalRadius (#PCDATA)>
+  <!ELEMENT Mass (#PCDATA)>
+  <!ELEMENT Diameter (#PCDATA)>
+  <!ELEMENT Color (#PCDATA)>
+]>
+
+<PlanetarySystem>
+  <Body name="Sol"> 
+    <OrbitalRadius>     0.</OrbitalRadius> 	<!--  Orbital Radius in AU -->  
+    <Mass>         334800.</Mass>		<!--  Mass in earth masses -->
+    <Diameter>     109.044</Diameter>		<!--  Diameter rel. earth  -->
+    <Color>         yellow</Color>
+  </Body>
+  <Body name="Mercury" MoonOf="Sol">
+    <OrbitalRadius>  0.390</OrbitalRadius>
+    <Mass>           0.050</Mass>
+    <Diameter>      0.3825</Diameter>
+    <Color>           pink</Color>
+  </Body> 
+  <Body name="Venus" MoonOf="Sol">
+    <OrbitalRadius>  0.720</OrbitalRadius>
+    <Mass>           0.890</Mass>
+    <Diameter>      0.9488</Diameter>
+    <Color>          green</Color>
+  </Body>
+  <Body name="Earth" MoonOf="Sol">
+    <OrbitalRadius>  1.000</OrbitalRadius>
+    <Mass>            1.00</Mass>
+    <Diameter>      1.0000</Diameter>
+    <Color>           blue</Color>
+  </Body> 
+  <Body name="Moon" MoonOf="Earth">
+    <OrbitalRadius>1.00257</OrbitalRadius>
+    <Mass>           1/80.</Mass>
+    <Diameter>      0.2724</Diameter>
+    <Color>           gray</Color>
+  </Body>
+  <Body name="Mars" MoonOf="Sol">
+    <OrbitalRadius>  1.500</OrbitalRadius>
+    <Mass>            0.11</Mass>
+    <Diameter>      0.5326</Diameter>
+    <Color>            red</Color>
+  </Body> 
+  <Body name="Jupiter" MoonOf="Sol">
+    <OrbitalRadius>  5.200</OrbitalRadius>
+    <Mass>           318.0</Mass>
+    <Diameter>     11.0000</Diameter>
+    <Color>           cyan</Color>
+  </Body>
+  <Body name="Callisto" MoonOf="Jupiter">
+    <OrbitalRadius>5.21259</OrbitalRadius>
+    <Mass>        1.802e-2</Mass>
+    <Diameter>       .3768</Diameter>
+    <Color>           gray</Color>
+  </Body>
+  <Body name="Ganymede" MoonOf="Jupiter">
+    <OrbitalRadius>5.20715</OrbitalRadius>
+    <Mass>         0.02482</Mass>
+    <Diameter>      0.4130</Diameter>
+    <Color>           gray</Color>
+  </Body>
+  <Body name="Europa" MoonOf="Jupiter">
+    <OrbitalRadius>5.20449</OrbitalRadius>
+    <Mass>         8.04e-3</Mass>
+    <Diameter>      0.2454</Diameter>
+    <Color>           gray</Color>
+  </Body>
+  <Body name="Io" MoonOf="Jupiter">
+    <OrbitalRadius>5.20282</OrbitalRadius>
+    <Mass>         1.49e-2</Mass>
+    <Diameter>      0.2847</Diameter>
+    <Color>           gray</Color>
+  </Body>
+  <Body name="Saturn" MoonOf="Sol">
+    <OrbitalRadius>  9.500</OrbitalRadius>
+    <Mass>            95.0</Mass>
+    <Diameter>      9.0000</Diameter>
+    <Color>        magenta</Color>
+  </Body>
+  <Body name="Uranus" MoonOf="Sol">
+    <OrbitalRadius>  19.20</OrbitalRadius>
+    <Mass>            17.0</Mass>
+    <Diameter>      4.0000</Diameter>
+    <Color>         orange</Color>
+ </Body>
+  <Body name="Neptune" MoonOf="Sol">
+    <OrbitalRadius>  30.10</OrbitalRadius>
+    <Mass>            17.0</Mass>
+    <Diameter>      4.0000</Diameter>
+    <Color>          white</Color>
+  </Body>
+  <Body name="Pluto" MoonOf="Sol">
+    <OrbitalRadius>  39.50</OrbitalRadius>
+    <Mass>           0.002</Mass>
+    <Diameter>        0.18</Diameter>
+    <Color>       darkGray</Color>
+  </Body>
+</PlanetarySystem>

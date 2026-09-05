@@ -1,0 +1,4 @@
+target
+dist
+errors.log*
+.JOS.json
