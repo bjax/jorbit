@@ -146,11 +146,3 @@ tag follows its target.
 
 Bugs
 ----
-
-TODO
-----
-
-. Add mouse capability to click to center
-. Add mouseover capability to get mass
-. Add ability to speed up/ slow down
-. Add trailing path lengthen/shorten

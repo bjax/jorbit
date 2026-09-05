@@ -8,7 +8,7 @@ Orbit is a real-time 2D orbital mechanics simulator: it numerically integrates N
 dynamics and renders the result with OpenGL (via LWJGL). It began as 1980s simulation-computer test
 code, was ported through Mac/SGI/Java-applet incarnations, was rewritten in 2011 as a NetBeans Ant
 project for a high-school calculus demonstration, and was modernized in 2026 to Maven/LWJGL 3/JUnit 5.
-See `README.txt` for the full history and TODOs. `archive/` holds the old C, applet, and Java-applet
+See `README.txt` for the full history. `archive/` holds the old C, applet, and Java-applet
 predecessors — reference only, not built or maintained.
 
 ## Build system
@@ -356,8 +356,8 @@ The simulation is built around a small state-space framework, independent of ren
   care whether the file it's reading was written by `saveToFile()` or by a human.
 
 `OrbitMenu` (a Swing `JMenuBar`) and `solarsystem.xml` (an XML initial-conditions file) exist but are
-not wired up to anything yet — they correspond to unimplemented README TODO items (menu actions all
-throw `UnsupportedOperationException`; nothing in `src/` reads the XML file).
+not wired up to anything yet (menu actions all throw `UnsupportedOperationException`; nothing in
+`src/` reads the XML file).
 
 All simulation code lives under package `org.jaxfam.orbit`, source in `src/main/java`, tests in
 `src/test/java` mirroring the same package structure (standard Maven layout).
