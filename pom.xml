@@ -21,44 +21,6 @@
         <exec.mainClass>org.jaxfam.orbit.Orbit</exec.mainClass>
     </properties>
 
-    <profiles>
-        <profile>
-            <id>lwjgl-natives-macos-arm64</id>
-            <activation>
-                <os><family>mac</family><arch>aarch64</arch></os>
-            </activation>
-            <properties><lwjgl.natives>natives-macos-arm64</lwjgl.natives></properties>
-        </profile>
-        <profile>
-            <id>lwjgl-natives-macos</id>
-            <activation>
-                <os><family>mac</family><arch>x86_64</arch></os>
-            </activation>
-            <properties><lwjgl.natives>natives-macos</lwjgl.natives></properties>
-        </profile>
-        <profile>
-            <id>lwjgl-natives-linux-arm64</id>
-            <activation>
-                <os><family>unix</family><name>linux</name><arch>aarch64</arch></os>
-            </activation>
-            <properties><lwjgl.natives>natives-linux-arm64</lwjgl.natives></properties>
-        </profile>
-        <profile>
-            <id>lwjgl-natives-linux</id>
-            <activation>
-                <os><family>unix</family><name>linux</name></os>
-            </activation>
-            <properties><lwjgl.natives>natives-linux</lwjgl.natives></properties>
-        </profile>
-        <profile>
-            <id>lwjgl-natives-windows</id>
-            <activation>
-                <os><family>windows</family></os>
-            </activation>
-            <properties><lwjgl.natives>natives-windows</lwjgl.natives></properties>
-        </profile>
-    </profiles>
-
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -72,6 +34,13 @@
     </dependencyManagement>
 
     <dependencies>
+        <!-- One dist/Orbit.jar runs unmodified on every platform below: LWJGL's own runtime
+             loader (org.lwjgl.system.Platform/SharedLibraryLoader) detects the current OS/arch
+             at startup and extracts+loads only the matching native library bundled here - the
+             natives for every other platform just sit inert in the jar. This replaces the old
+             lwjgl.natives-property + <profiles> approach (one os.family/os.arch-activated
+             profile per platform), which only ever bundled natives for whichever machine
+             happened to run the build, producing a jar that only worked on that one platform. -->
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl</artifactId>
@@ -79,7 +48,27 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
+            <classifier>natives-windows</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <classifier>natives-macos-arm64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <classifier>natives-linux</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl</artifactId>
+            <classifier>natives-linux-arm64</classifier>
         </dependency>
         <dependency>
             <groupId>org.lwjgl</groupId>
@@ -88,7 +77,27 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-glfw</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
+            <classifier>natives-windows</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <classifier>natives-macos-arm64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <classifier>natives-linux</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-glfw</artifactId>
+            <classifier>natives-linux-arm64</classifier>
         </dependency>
         <dependency>
             <groupId>org.lwjgl</groupId>
@@ -97,7 +106,27 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-opengl</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
+            <classifier>natives-windows</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <classifier>natives-macos-arm64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <classifier>natives-linux</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-opengl</artifactId>
+            <classifier>natives-linux-arm64</classifier>
         </dependency>
         <dependency>
             <groupId>org.lwjgl</groupId>
@@ -106,7 +135,27 @@
         <dependency>
             <groupId>org.lwjgl</groupId>
             <artifactId>lwjgl-stb</artifactId>
-            <classifier>${lwjgl.natives}</classifier>
+            <classifier>natives-windows</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-stb</artifactId>
+            <classifier>natives-macos</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-stb</artifactId>
+            <classifier>natives-macos-arm64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-stb</artifactId>
+            <classifier>natives-linux</classifier>
+        </dependency>
+        <dependency>
+            <groupId>org.lwjgl</groupId>
+            <artifactId>lwjgl-stb</artifactId>
+            <classifier>natives-linux-arm64</classifier>
         </dependency>
 
         <dependency>
