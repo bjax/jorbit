@@ -52,6 +52,10 @@ public class Orbit {
     static final File STATE_FILE = new File(".JOS.json"); /** IC/checkpoint file R
                                                     reloads and S saves to, in the
                                                     working directory              */
+    static final float REFERENCE_DISPLAY_HEIGHT = 900f; /** DISPLAY_HEIGHT this UI's fixed-pixel
+                                                    font size and histogram geometry were tuned
+                                                    against (a typical Mac logical/point
+                                                    resolution) - see uiScale                  */
     static final String HELP_TEXT = // shown down the left side of the screen while showHelp is set
               "Keyboard:\n"
             + "P: run/pause\n"
@@ -90,6 +94,16 @@ public class Orbit {
                                                   (Retina) displays              */
 
     double m2pix;                           /** meters per display pixel       */
+    float uiScale;                          /** DISPLAY_HEIGHT / REFERENCE_DISPLAY_HEIGHT, set in
+                                                  create() once the monitor's video mode is known;
+                                                  scales the font bake size and histogram geometry
+                                                  so they read the same relative size regardless of
+                                                  whether DISPLAY_HEIGHT is a Mac logical/point
+                                                  resolution (small numbers, a few hundred to ~1100)
+                                                  or Windows' raw physical-pixel resolution (much
+                                                  larger, e.g. 1080/1440/2160) - without it, fixed-
+                                                  pixel-sized text and histogram bars that read fine
+                                                  on Mac are tiny on a high-res Windows display   */
 
     OrbitalSystem system;                   /** model we are running           */
     StateVector IC_vector;                  /** initial state vector           */
@@ -657,6 +671,7 @@ public class Orbit {
         }
         DISPLAY_WIDTH = vidMode.width();
         DISPLAY_HEIGHT = vidMode.height();
+        uiScale = DISPLAY_HEIGHT / REFERENCE_DISPLAY_HEIGHT;
 
         // no version/profile hints: on macOS this yields a legacy 2.1 context
         // (required for the immediate-mode/fixed-function rendering below);
@@ -706,6 +721,19 @@ public class Orbit {
         // behind whatever app already has focus (e.g. the launching Terminal).
         // Explicitly focus it so the window is actually visible to the user.
         glfwFocusWindow(window);
+        // On Windows, that glfwFocusWindow() call can itself be silently denied:
+        // Win32's SetForegroundWindow refuses to hand over the foreground once the
+        // launching console's grace period has lapsed, which JVM startup plus LWJGL's
+        // native-library extraction routinely outlasts. The window is visible but
+        // never actually receives keyboard focus, so keystrokes keep going to the
+        // launching console (which swallows them) until the user manually clicks the
+        // window; Ctrl-C still "works" because it's a console signal, not a GLFW key
+        // event. Iconifying and immediately restoring goes through a different Win32
+        // code path that isn't subject to that same foreground-lock restriction, and
+        // reliably grabs real focus.
+        glfwIconifyWindow(window);
+        glfwRestoreWindow(window);
+        glfwFocusWindow(window);
 
         //OpenGL
         initGL();
@@ -729,13 +757,13 @@ public class Orbit {
         final int numBins = 12;
         final float oldBinSlot = 300f / numBins;      // previous (pre-shrink) per-bin slot size
         final float oldBarThickness = oldBinSlot * 0.8275f; // previous bar fill fraction
-        final float gap = oldBinSlot - oldBarThickness;     // gap to preserve
-        final float barThickness = oldBarThickness / 2f;    // 1/4 as thick, then doubled: net 1/2
-        final float maxBarLength = 150f;
+        final float gap = (oldBinSlot - oldBarThickness) * uiScale;     // gap to preserve
+        final float barThickness = (oldBarThickness / 2f) * uiScale;    // 1/4 as thick, then doubled: net 1/2
+        final float maxBarLength = 150f * uiScale;
 
-        float textBottomY = (DISPLAY_HEIGHT/2f - 50f) - trueTypeFont.getHeight();
-        float bottomY = textBottomY - 20f - numBins * (barThickness + gap);
-        float rightX = DISPLAY_WIDTH/2f - 100; // leaves room for the size labels
+        float textBottomY = (DISPLAY_HEIGHT/2f - 50f * uiScale) - trueTypeFont.getHeight();
+        float bottomY = textBottomY - 20f * uiScale - numBins * (barThickness + gap);
+        float rightX = DISPLAY_WIDTH/2f - 100 * uiScale; // leaves room for the size labels
 
         return new HistogramLayout(rightX, bottomY, barThickness, gap, maxBarLength, numBins);
     }
@@ -815,7 +843,7 @@ public class Orbit {
      * Set up the font for drawing strings
      */
     void initFont() {
-        trueTypeFont = new TrueTypeFont("/fonts/Inconsolata-Regular.ttf", 18f);
+        trueTypeFont = new TrueTypeFont("/fonts/Inconsolata-Regular.ttf", 18f * uiScale);
     }
 
     /**
