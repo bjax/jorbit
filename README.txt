@@ -77,8 +77,8 @@ then for each of that scenario's initial-condition parameters (number of
 bodies, size range, step size, etc.), showing the current default in
 brackets - press Enter to accept it, or type a new value.
 
-A reminder - "'p' to run/pause, '?' for help, 'Esc' to exit" - is always
-shown centered at the bottom of the screen.
+A reminder - "'p' to run/pause, '?' for help, 'c'/'C' to circularize,
+'Esc' to exit" - is always shown centered at the bottom of the screen.
 
 Keyboard controls, once the window has focus:
 
@@ -102,6 +102,12 @@ the body-count/time text; largest-size bin at top, colored to match, all
 12 bins labeled in Earth radii - median size for bins with bodies, the
 bin's own size-range midpoint for empty ones). The selected body's own
 size bin, if any, is drawn in a lighter shade so it stands out.
+c:: Circularize every body's velocity into an orbit at 25% of full
+circular speed about the system's current center of mass - not enough
+speed to hold that radius, so bodies will actually spiral inward rather
+than stay put. A one-shot reset, not a toggle - press again anytime to
+re-circularize from wherever the bodies currently are.
+Shift-C:: Same as c, but at 100% (true circular) speed.
 +:: Zoom in
 -:: Zoom out
 Page Up:: Double the simulation time step (speed up)

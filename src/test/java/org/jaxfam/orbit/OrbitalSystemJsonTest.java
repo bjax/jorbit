@@ -45,6 +45,7 @@ public class OrbitalSystemJsonTest {
         original.trailDecimation = 3;
         original.enforce_R_limit = true;
         original.maxR = 7.5;
+        original.colorByOrbitShape = true;
         original.bodies = new ArrayList<>();
 
         Body named = new Body(1.5, -2.5, 100.0, -200.0, 2.0, 5.5, new Color(1f, 0.5f, 0.25f), 50);
@@ -64,6 +65,7 @@ public class OrbitalSystemJsonTest {
         assertEquals(3, loaded.trailDecimation);
         assertTrue(loaded.enforce_R_limit);
         assertEquals(7.5, loaded.maxR, pct);
+        assertTrue(loaded.colorByOrbitShape);
         assertEquals(2, loaded.bodies.size());
 
         Body loadedNamed = loaded.bodies.get(0);
@@ -100,6 +102,22 @@ public class OrbitalSystemJsonTest {
         JSONObject root = new JSONObject(Files.readString(file.toPath()));
         JSONObject body = root.getJSONArray("bodies").getJSONObject(0);
         assertFalse(body.has("name"));
+    }
+
+    @Test
+    public void testMissingColorByOrbitShapeKeyDefaultsFalse(@TempDir File tempDir) throws IOException {
+        // a hand-written or pre-existing save file from before colorByOrbitShape was added to
+        // the schema won't have this key at all; loading it must not throw, and must default
+        // to false (matching every scenario except RandomSystem, which explicitly opts in)
+        String json = "{\"dt\": 1.0, \"bodies\": [{"
+                + "\"positionAU\": [0.0, 0.0], \"velocityMS\": [0.0, 0.0],"
+                + "\"radiusEarthRadii\": 1.0, \"densityGCm3\": 1.0, \"color\": [1.0, 1.0, 1.0]"
+                + "}]}";
+        File file = new File(tempDir, ".JOS.json");
+        Files.writeString(file.toPath(), json);
+
+        OrbitalSystem loaded = OrbitalSystem.loadFromFile(file);
+        assertFalse(loaded.colorByOrbitShape);
     }
 
     @Test

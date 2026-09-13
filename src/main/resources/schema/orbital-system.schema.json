@@ -37,6 +37,11 @@
       "default": 1000.0,
       "description": "Reference system radius, AU; escape-culling threshold is 3x this"
     },
+    "colorByOrbitShape": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether each step recolors bodies light blue/light red while their trail currently fits an elliptical/hyperbolic orbit (see Body.updateOrbitColor())"
+    },
     "bodies": {
       "type": "array",
       "minItems": 1,

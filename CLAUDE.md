@@ -118,8 +118,12 @@ The simulation is built around a small state-space framework, independent of ren
   whole bin's bodies at once (tracked in `Orbit.binHoveredBodies`, cleared and replaced each move event).
   Hitting the histogram takes over the cursor for this purpose: normal single-body world-space hover
   hit-testing is skipped whenever `findHistogramBinAt()` finds a bin, so the two mechanisms don't fight
-  over `hovered`. `saveToFile()`/`loadFromFile()` serialize the whole system — integration parameters plus
-  every body's position, velocity, size, density, color, and optional name — as JSON matching
+  over `hovered`. `saveToFile()`/`loadFromFile()` serialize the whole system — integration parameters
+  (including `colorByOrbitShape`, added after a real bug: `loadFromFile()` always builds a plain
+  `OrbitalSystem`, never a `RandomSystem`, so before this was part of the schema, reloading a
+  `RandomSystem` save silently reset `colorByOrbitShape` to `false` and its light-blue/light-red
+  recoloring stopped - defaults to `false` via `optBoolean` for files saved before this field existed)
+  plus every body's position, velocity, size, density, color, and optional name — as JSON matching
   `src/main/resources/schema/orbital-system.schema.json` (hand-written to/from `org.json`'s
   `JSONObject`/`JSONArray`, not validated against the schema file at runtime — no schema-validator
   dependency is pulled in; the schema is the documented contract, and the Java code is kept in sync with
@@ -172,6 +176,49 @@ The simulation is built around a small state-space framework, independent of ren
   `defaultShowHistogram = true` (the size histogram is applied via `applySystemDefaults()` alongside
   `defaultM2pix`/`defaultHighViz`, as if `H` had been pressed) since the size distribution is the whole
   point of that scenario; the others leave it at its default (`false`).
+  `circularizeAbout(Body)` sets a body's `U`/`V` for a circular orbit about a given central body (its
+  mass, position, and velocity), used throughout `SolarSystem`'s constructor (every planet about `Sol`,
+  every moon about its planet); it now delegates to a raw-parameter overload,
+  `circularizeAbout(double centerX, double centerY, double centerMassKg, double centerU, double centerV)`,
+  generalized to an arbitrary point rather than requiring an actual `Body`. Both funnel into a private
+  `applyCircularVelocity(centerU, centerV, xDelta, yDelta, R, speed)` that does the actual direction
+  math once a caller has reduced its own notion of "how fast" to a single speed: velocity = the
+  center's own velocity, plus `speed` in the direction 90° **clockwise** from the vector pointing from
+  the body toward the center (e.g. center due west of the body ⇒ motion due north) — `(-yDelta, +xDelta)`
+  normalized by `R`. An earlier version had the sign on the second component backwards
+  (`(-yDelta, -xDelta)`), which is only accidentally correct when the body sits exactly north/south of
+  the center (`xDelta == 0`, true of every `SolarSystem` body by construction — planets/moons are
+  always placed on the Y-axis relative to their reference body, which is why this went unnoticed for
+  years) and is a full 180° reversal when it sits exactly east/west (`yDelta == 0`); for any other
+  angle it isn't even perpendicular. Caught via `OrbitalSystem.circularizeAllAboutCenterOfMass()`
+  (below) sending every body in a `RandomSystem` cluster (bodies scattered in every direction, not
+  axis-aligned) the wrong way at once. `CircularizeTest` now checks the signed cross product of the
+  center-to-body vector with the resulting relative velocity (`R * speed` exactly for a correct
+  clockwise perpendicular vector, `-R * speed` for the old bug's backwards case) rather than just a
+  dot-product-is-zero perpendicularity check, which - as this bug demonstrated - can't tell clockwise
+  from counterclockwise and so didn't catch it the first time.
+
+  `OrbitalSystem.circularizeAllAboutCenterOfMass()` circularizes every body in `bodies` about the
+  system's own aggregate center of mass in one shot (`Orbit`'s `c`/`C` keys), rather than one
+  designated reference body. Since no real mass actually sits at an aggregate center of mass, each
+  body's orbital speed instead comes from its own true current net gravitational acceleration - a
+  fresh (private) `sumForces()` pass right before circularizing anyone, then
+  `Body.circularizeAboutAcceleration()` (`speed = fraction * sqrt(hypot(getUdot(), getVdot()) * R)`,
+  centripetal acceleration solved for velocity) instead of the point-mass vis-viva formula. Both take
+  a `fraction` of full circular speed (an overload defaulting to `1.0` handles the plain, unscaled
+  case) - `Orbit.circularizeAllBodies(fraction)` passes `1.0` for Shift-`C` (true circular, stays put)
+  or `Orbit.CIRCULARIZE_PARTIAL_FRACTION` (`0.25`) for plain `c` (too slow to hold that radius, so
+  those bodies visibly spiral inward - `handleKeyPress()` distinguishes the two via `GLFW_MOD_SHIFT`,
+  the same way it already does for Tab/Shift-Tab and `/`/`?`). The center of mass's position and velocity
+  (`getCmX()`/`getCmY()`/`getCmU()`/`getCmV()` - the last two needed adding `totalUMoment()`/
+  `totalVMoment()`, the mass-weighted-average-velocity analog of the existing `totalXMoment()`/
+  `totalYMoment()`) are each computed exactly *once* and reused for every body, rather than recomputed
+  body-by-body as bodies are circularized one at a time - an earlier version recomputed per body,
+  which kept including each already-circularized body's new velocity in the next body's
+  center-of-mass-velocity calculation, drifting further off (and, for a heavy early-processed body,
+  sometimes snapping many later bodies toward nearly the same velocity) with every body processed -
+  the actual "half the bodies rush toward one corner at a common velocity" symptom that led to finding
+  both this and the direction bug above in the same debugging pass.
 - **`Orbit`** — the entry point and main loop. Owns the `OrbitalSystem system` instance, chosen at
   startup by an stdin prompt (`promptScenario()`) between `SolarSystem`/`TriaxSystem`/`RandomSystem` —
   `TempSystem` stays code-only/unwired, per its own javadoc, debugging-only — then prompts on stdin for

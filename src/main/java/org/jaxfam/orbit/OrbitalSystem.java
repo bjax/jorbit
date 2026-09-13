@@ -173,6 +173,7 @@ public class OrbitalSystem implements DynamicSys {
         root.put("trailDecimation", trailDecimation);
         root.put("enforceRadiusLimit", enforce_R_limit);
         root.put("maxRadiusAU", maxR);
+        root.put("colorByOrbitShape", colorByOrbitShape);
 
         JSONArray bodyArray = new JSONArray();
         for (Body body : bodies) {
@@ -216,6 +217,7 @@ public class OrbitalSystem implements DynamicSys {
         system.trailDecimation = root.optInt("trailDecimation", 2);
         system.enforce_R_limit = root.optBoolean("enforceRadiusLimit", false);
         system.maxR = root.optDouble("maxRadiusAU", 1000.0);
+        system.colorByOrbitShape = root.optBoolean("colorByOrbitShape", false);
 
         JSONArray bodyArray = root.getJSONArray("bodies");
         system.bodies = new ArrayList<>(bodyArray.length());
@@ -432,6 +434,83 @@ public class OrbitalSystem implements DynamicSys {
      */
     public double getCmY() {
         return totalYMoment()/totalMass();
+    }
+
+    /**
+     * What is the total x-momentum represented?
+     * @return total x-momentum, kg*(m/s)
+     */
+    public double totalUMoment() {
+        double totalUMoment = 0.0;
+        for (Body body : bodies) {
+            totalUMoment += body.getMass()*body.getU();
+        }
+        return totalUMoment;
+    }
+
+    /**
+     * What is the total y-momentum represented?
+     * @return total y-momentum, kg*(m/s)
+     */
+    public double totalVMoment() {
+        double totalVMoment = 0.0;
+        for (Body body : bodies) {
+            totalVMoment += body.getMass()*body.getV();
+        }
+        return totalVMoment;
+    }
+
+    /**
+     * What is the system center-of-mass's own velocity in the X direction (i.e. the
+     * mass-weighted average of every body's U)?
+     * @return center-of-mass X velocity, m/s
+     */
+    public double getCmU() {
+        return totalUMoment()/totalMass();
+    }
+
+    /**
+     * What is the system center-of-mass's own velocity in the Y direction (i.e. the
+     * mass-weighted average of every body's V)?
+     * @return center-of-mass Y velocity, m/s
+     */
+    public double getCmV() {
+        return totalVMoment()/totalMass();
+    }
+
+    /**
+     * Circularizes every body's velocity into a circular orbit about this system's own
+     * aggregate center of mass - unlike {@link Body#circularizeAbout(Body)}, which circularizes
+     * about one specific other (real) body, no actual mass sits at an aggregate center of mass,
+     * so each body's orbital speed instead comes from its own true current net gravitational
+     * acceleration ({@link Body#circularizeAboutAcceleration}), via a fresh {@link #sumForces()}
+     * pass right before circularizing anyone. The center of mass's position and velocity
+     * ({@link #getCmX()}/{@link #getCmY()}/{@link #getCmU()}/{@link #getCmV()}) are each computed
+     * exactly once and reused for every body, rather than recomputed body-by-body as bodies are
+     * circularized one at a time - recomputing per body would keep including each
+     * already-circularized body's new velocity in the next body's center-of-mass-velocity
+     * calculation, drifting further off with every body processed.
+     */
+    public void circularizeAllAboutCenterOfMass() {
+        circularizeAllAboutCenterOfMass(1.0);
+    }
+
+    /**
+     * Same as {@link #circularizeAllAboutCenterOfMass()}, scaled to a fraction of the full
+     * circular speed for every body - see {@link Body#circularizeAboutAcceleration(double,
+     * double, double, double, double)}.
+     * @param fraction fraction of full circular speed to use, e.g. 1.0 for a true circular
+     *                 orbit, 0.8 for 80% of it
+     */
+    public void circularizeAllAboutCenterOfMass(double fraction) {
+        sumForces(); // fresh acceleration for every body, from the current configuration
+        double cmX = getCmX();
+        double cmY = getCmY();
+        double cmU = getCmU();
+        double cmV = getCmV();
+        for (Body body : bodies) {
+            body.circularizeAboutAcceleration(cmX, cmY, cmU, cmV, fraction);
+        }
     }
 
    /**

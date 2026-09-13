@@ -289,17 +289,99 @@ public class Body implements DynamicSys {
      * @param centerMass the body about which to circularize the orbit
      */
     public void circularizeAbout(Body centerMass) {
-        double xDelta = this.getX() - centerMass.getX();
-        double yDelta = this.getY() - centerMass.getY();
-        double R = java.lang.Math.sqrt(xDelta * xDelta + yDelta * yDelta);
-        double Vel_ic = 0.;
-        this.U = centerMass.getU();
-        this.V = centerMass.getV();
-        if (R > 0.) {
-            Vel_ic = java.lang.Math.sqrt(SolarSystem.Kgravity * centerMass.getMass() / R);
+        circularizeAbout(centerMass.getX(), centerMass.getY(), centerMass.getMass(),
+                centerMass.getU(), centerMass.getV());
+    }
 
-            this.U = this.U - Vel_ic * yDelta / R;
-            this.V = this.V - Vel_ic * xDelta / R;
+    /**
+     * Sets X and Y inertial velocities (U and V) so the body is in a circular orbit about the
+     * given central position/mass/velocity - the same physics as {@link #circularizeAbout(Body)},
+     * generalized to an arbitrary point (e.g. a system's aggregate center of mass, which isn't a
+     * real {@code Body}) rather than requiring an actual central body.
+     * @param centerX      world X of the point to orbit, m
+     * @param centerY      world Y of the point to orbit, m
+     * @param centerMassKg mass to orbit, kg
+     * @param centerU      X velocity of the point to orbit, m/s - added on top of the computed
+     *                     orbital velocity, so this stays correct even if the center itself is moving
+     * @param centerV      Y velocity of the point to orbit, m/s
+     */
+    public void circularizeAbout(double centerX, double centerY, double centerMassKg,
+            double centerU, double centerV) {
+        double xDelta = this.getX() - centerX;
+        double yDelta = this.getY() - centerY;
+        double R = java.lang.Math.sqrt(xDelta * xDelta + yDelta * yDelta);
+        double speed = (R > 0.) ? java.lang.Math.sqrt(SolarSystem.Kgravity * centerMassKg / R) : 0.;
+        applyCircularVelocity(centerU, centerV, xDelta, yDelta, R, speed);
+    }
+
+    /**
+     * Sets X and Y inertial velocities (U and V) so the body is in a circular orbit about the
+     * given point, using this body's own <em>current</em> net acceleration ({@link #getUdot()}/
+     * {@link #getVdot()}) to derive the orbital speed, rather than assuming a single point mass
+     * sits at the center the way {@link #circularizeAbout(double, double, double, double, double)}
+     * does. Appropriate for circularizing about an aggregate center of mass (no real mass is
+     * actually there - the orbital speed instead comes from whatever the true net gravitational
+     * pull on this body currently is, from every other body). The caller must ensure this body's
+     * force accumulators reflect the current configuration (e.g. via a fresh force summation)
+     * before calling this, since {@link #getUdot()}/{@link #getVdot()} just read whatever was
+     * last computed there.
+     * @param centerX world X of the point to orbit, m
+     * @param centerY world Y of the point to orbit, m
+     * @param centerU X velocity of the point to orbit, m/s - added on top of the computed
+     *                orbital velocity, so this stays correct even if the center itself is moving
+     * @param centerV Y velocity of the point to orbit, m/s
+     */
+    public void circularizeAboutAcceleration(double centerX, double centerY,
+            double centerU, double centerV) {
+        circularizeAboutAcceleration(centerX, centerY, centerU, centerV, 1.0);
+    }
+
+    /**
+     * Same as {@link #circularizeAboutAcceleration(double, double, double, double)}, scaled to a
+     * fraction of the full circular speed - e.g. 0.25 for an orbit that's 25% of circular (and so,
+     * lacking enough speed to balance the pull toward the center at that radius, will actually
+     * decay inward rather than stay put), while 1.0 (full circular speed) is the same true
+     * circular orbit the unscaled overload gives.
+     * @param centerX  world X of the point to orbit, m
+     * @param centerY  world Y of the point to orbit, m
+     * @param centerU  X velocity of the point to orbit, m/s - added on top of the computed
+     *                 orbital velocity, so this stays correct even if the center itself is moving
+     * @param centerV  Y velocity of the point to orbit, m/s
+     * @param fraction fraction of full circular speed to use, e.g. 1.0 for a true circular orbit,
+     *                 0.25 for 25% of it
+     */
+    public void circularizeAboutAcceleration(double centerX, double centerY,
+            double centerU, double centerV, double fraction) {
+        double xDelta = this.getX() - centerX;
+        double yDelta = this.getY() - centerY;
+        double R = java.lang.Math.sqrt(xDelta * xDelta + yDelta * yDelta);
+        double accelMag = java.lang.Math.hypot(getUdot(), getVdot());
+        double speed = (R > 0.) ? fraction * java.lang.Math.sqrt(accelMag * R) : 0.;
+        applyCircularVelocity(centerU, centerV, xDelta, yDelta, R, speed);
+    }
+
+    /**
+     * Shared by both {@code circularizeAbout*} methods once each has reduced its own notion of
+     * "how fast" to a single orbital speed: sets U/V to the center's own velocity plus that speed
+     * in the direction 90 degrees <em>clockwise</em> from the vector pointing from this body
+     * toward the center - e.g. if the center is due west of this body, the resulting motion is
+     * due north. (Screen/world Y increases "north"/up, matching this program's Y-up convention;
+     * see {@code Orbit}'s coordinate-system notes.) Does nothing beyond inheriting the center's
+     * velocity if {@code R <= 0} (this body coincides with the center) or {@code speed == 0}.
+     * @param centerU X velocity of the point being orbited, m/s
+     * @param centerV Y velocity of the point being orbited, m/s
+     * @param xDelta  this body's X position minus the center's, m
+     * @param yDelta  this body's Y position minus the center's, m
+     * @param R       distance from this body to the center, m ({@code hypot(xDelta, yDelta)})
+     * @param speed   orbital speed magnitude, m/s (0 if not applicable, e.g. R == 0)
+     */
+    private void applyCircularVelocity(double centerU, double centerV,
+            double xDelta, double yDelta, double R, double speed) {
+        this.U = centerU;
+        this.V = centerV;
+        if (R > 0. && speed != 0.) {
+            this.U = this.U - speed * yDelta / R;
+            this.V = this.V + speed * xDelta / R;
         }
     }
 

@@ -67,6 +67,7 @@ public class Orbit {
             + "Tab/Shift-Tab: next/previous body\n"
             + "V: toggle high-visibility\n"
             + "H: toggle size histogram\n"
+            + "c/C: circularize all bodies about center of mass (25%/full speed)\n"
             + "S: save state\n"
             + "R: reload state\n"
             + "Esc: exit\n"
@@ -412,6 +413,22 @@ public class Orbit {
         }
     }
 
+    /** fraction of full circular speed 'c' (as opposed to Shift-'C') applies - see circularizeAllBodies() */
+    static final double CIRCULARIZE_PARTIAL_FRACTION = 0.25;
+
+    /**
+     * C's key handler: circularizes every body's velocity about the system's aggregate
+     * center of mass (OrbitalSystem.circularizeAllAboutCenterOfMass()) - a one-shot reset
+     * rather than a running toggle, so pressing it again re-circularizes from whatever
+     * positions/masses the bodies currently have (useful after panning, zooming, or
+     * letting the system evolve a while) rather than undoing anything.
+     * @param fraction fraction of full circular speed to use, e.g. 1.0 for a true circular
+     *                 orbit (Shift-C), CIRCULARIZE_PARTIAL_FRACTION for a partial one (plain C)
+     */
+    void circularizeAllBodies(double fraction) {
+        system.circularizeAllAboutCenterOfMass(fraction);
+    }
+
     /**
      * Updates which body (if any) is under the mouse cursor and, while the left button is
      * held down, pans the view by the cursor's movement since the last call (click-and-drag
@@ -606,7 +623,7 @@ public class Orbit {
      * the original Keyboard.enableRepeatEvents(false) behavior).
      * @param mods bitmask of GLFW_MOD_* modifiers held during the press (only
      *             GLFW_MOD_SHIFT is currently consulted: to distinguish Tab from
-     *             Shift-Tab, and Slash from Shift-Slash i.e. '?')
+     *             Shift-Tab, Slash from Shift-Slash i.e. '?', and 'c' from Shift-'c' i.e. 'C')
      */
     void handleKeyPress(int key, int mods) {
         switch (key) {
@@ -620,6 +637,8 @@ public class Orbit {
             case GLFW_KEY_DOWN:   shiftDown();            break;
             case GLFW_KEY_HOME:   setSystemCenterZeroZero(); break;
             case GLFW_KEY_P:      run = !run;             break;
+            case GLFW_KEY_C:      circularizeAllBodies((mods & GLFW_MOD_SHIFT) != 0
+                                          ? 1.0 : CIRCULARIZE_PARTIAL_FRACTION);          break;
             case GLFW_KEY_R:      reloadFromFile();       break;
             case GLFW_KEY_S:      saveState();            break;
             case GLFW_KEY_V:      toggleHighlight();     break;
@@ -911,7 +930,7 @@ public class Orbit {
         // a constant hint rather than status that changes with P
         glColor3f(1f, 1f, 1f);
         trueTypeFont.drawString(0, -DISPLAY_HEIGHT/2f + 30,
-                "'p' to run/pause, '?' for help, 'Esc' to exit", 1f, 1f, TrueTypeFont.ALIGN_CENTER);
+                "'p' to run/pause, '?' for help, 'c'/'C' to circularize, 'Esc' to exit", 1f, 1f, TrueTypeFont.ALIGN_CENTER);
         error = glGetError();
         if (error != 0) {
             throw new RuntimeException();
