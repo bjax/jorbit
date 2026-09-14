@@ -28,6 +28,13 @@ class TriaxSystem extends OrbitalSystem {
         super();
 
         maxR = 3.0; /** maximum distance from [0,0] allowed without culling */
+        // set on the system itself (not just passed to each Body below) so saveToFile()/
+        // loadFromFile() round-trip it correctly - previously this was only ever passed as a
+        // literal to each Body constructor, leaving OrbitalSystem's own pathLength at its
+        // default of 0, so a save always wrote "trailLength": 0 and a subsequent reload (R)
+        // rebuilt every body with trail length 0 - i.e. no trail at all - even though the
+        // original (pre-reload) bodies had real 1000-point trails
+        pathLength = 1000;
         bodies = new ArrayList<>(3);
 	double cos30 = Math.sqrt(3.0)/2.0;
         bodies.add(new Body(    0.,       // X_IC_AU
@@ -37,7 +44,7 @@ class TriaxSystem extends OrbitalSystem {
                                 5.0,      // radius, earth radii
                                 2.0,      // density, g/cm3
                                 Color.yellow(),
-                                1000      // path length
+                                pathLength
                                 ));
 
         bodies.add(new Body(cos30/100.0,  // X_IC_AU
@@ -47,7 +54,7 @@ class TriaxSystem extends OrbitalSystem {
                                 5.0,      // radius, earth radii
                                 2.0,      // density, g/cm3
                                 Color.blue(),
-                                1000      // path length
+                                pathLength
                                 ));
 
         bodies.add(new Body(-cos30/100.0, // X_IC_AU
@@ -57,7 +64,7 @@ class TriaxSystem extends OrbitalSystem {
                                 5.0,      // radius, earth radii
                                 2.0,      // density, g/cm3
                                 Color.red(),
-                                1000      // path length
+                                pathLength
                                 ));
 
         dt = 3000.0;
