@@ -81,9 +81,32 @@ The simulation is built around a small state-space framework, independent of ren
   static, allocation-per-call vector math (`add`, `mult`, `scale`). Integrators are written purely in
   terms of these, treating state as immutable values rather than mutating in place.
 - **`Integrator`** (abstract) with **`Euler1Integrator`**, **`RungeKutta2Integrator`**,
-  **`RungeKutta4Integrator`** — each implements `integrate(InputVector, deltaT)` by calling the
-  `DynamicSys`'s `getStateDeriv()` one or more times per step and combining the results. `OrbitalSystem`
-  currently always selects `RungeKutta4Integrator`.
+  **`RungeKutta4Integrator`**, **`RungeKuttaKahan4Integrator`** — each implements
+  `integrate(InputVector, deltaT)` by calling the `DynamicSys`'s `getStateDeriv()` one or more times
+  per step and combining the results. `OrbitalSystem` currently always selects `RungeKutta4Integrator`
+  (set in its own constructor); nothing currently selects any of the other three, including
+  `RungeKuttaKahan4Integrator`, which exists purely for comparison against the default (see
+  `IntegratorBenchmark` below). `RungeKuttaKahan4Integrator` is otherwise identical to
+  `RungeKutta4Integrator`, except the final `X_0 + dt*X_dot_avg` update per step — the one addition
+  whose rounding error actually accumulates across a whole propagation, since every other vector built
+  during a single `integrate()` call is transient — uses Kahan (compensated) summation: a per-element
+  `compensation` array, carried as an instance field across successive `integrate()` calls (this only
+  works because the integrator object itself, unlike any `StateVector`, is created once per
+  `OrbitalSystem` and lives for the system's whole lifetime), captures the low-order bits lost each
+  time that sum rounds back into a single `double` and feeds them into the next step's addition
+  instead of discarding them. Reset to zero whenever the state vector's length changes (a body culled
+  or merged in a collision), since there's no meaningful compensation to carry forward across that.
+  `IntegratorBenchmark` (`main()`, run via
+  `./mvnw compile exec:exec -Dexec.mainClass=org.jaxfam.orbit.IntegratorBenchmark`) is a standard,
+  reproducible comparison across all four: an identical seeded `RandomSystem` (see its `Random`-
+  accepting constructor overload, added for this — the normal 9-arg constructor still seeds from
+  wall-clock time) propagated a fixed number of steps under each integrator in turn, reporting total
+  mechanical energy drift (the true system conserves this exactly, so drift is purely a numerical
+  artifact) and wall-clock time. See README.txt's Benchmarking section for the full reference output,
+  how to read it, and why its step count is deliberately kept below this seed's first body-to-body
+  collision (past that point each integrator's slightly different trajectory reaches the collision at
+  a different moment, so body counts — and therefore energy — stop describing the same system across
+  integrators).
 - **`OrbitalSystem`** (implements `DynamicSys`) — owns the `ArrayList<Body> bodies` and drives one
   simulation step in `Propagate()`: sum pairwise gravitational forces (`Body.addForces` is static and
   applies equal/opposite force to both bodies in one call, halving the N² work), resolve collisions,

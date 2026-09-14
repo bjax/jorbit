@@ -38,6 +38,26 @@ class RandomSystem extends OrbitalSystem {
             double maxV_IC,
             double density,
             double maxSystemR) {
+        this(IC_dt, numBodies, thePathLength, distShape, minRadius, maxRadius, maxV_IC, density,
+                maxSystemR, new Random());
+    }
+
+    /**
+     * Same as the above, but with an explicit random source rather than one seeded from wall-
+     * clock time - lets a caller (e.g. IntegratorBenchmark) build a reproducible initial
+     * condition by passing a fixed-seed Random.
+     * @param generator random source for body placement/size/velocity/name
+     */
+    public RandomSystem(double IC_dt,
+            int numBodies,
+            int thePathLength,
+            double distShape,
+            double minRadius,
+            double maxRadius,
+            double maxV_IC,
+            double density,
+            double maxSystemR,
+            Random generator) {
 
 //        /* Circularize moons about planets, and planets about the Sun */
 //
@@ -56,8 +76,6 @@ class RandomSystem extends OrbitalSystem {
         double diskRadius_em;
 
         enforce_R_limit = true;
-
-        Random generator = new Random();
 
         Body body;
 

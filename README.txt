@@ -150,5 +150,57 @@ Hyperbolic, once enough of its trail has been recorded to tell). The
 block tracks the body every frame, like an air-traffic-control radar
 tag follows its target.
 
+Benchmarking
+------------
+
+`IntegratorBenchmark` (+src/main/java/org/jaxfam/orbit/IntegratorBenchmark.java+) is a standard,
+reproducible benchmark for comparing the four `Integrator` implementations - `Euler1Integrator`,
+`RungeKutta2Integrator`, `RungeKutta4Integrator` (the default `OrbitalSystem` always uses) and
+`RungeKuttaKahan4Integrator` (a Kahan/compensated-summation variant of RK4) - against each other.
+It builds an identical Random planetoid cluster (200 bodies, fixed seed 42, otherwise the same
+defaults Orbit itself offers interactively - see `RandomSystem`'s seeded-`Random` constructor
+overload, added for this), propagates it 2000 steps under each integrator in turn, and reports:
+
+- total mechanical energy (kinetic + gravitational potential) before and after, and its relative
+  drift - the true continuous N-body system conserves this exactly, so any drift is purely a
+  numerical-integration artifact, not physics
+- final body count (should equal the initial 200 for every integrator at this step count - see
+  the caveat below)
+- wall-clock time for the whole run
+
+Run it with:
+
+    ./mvnw compile exec:exec -Dexec.mainClass=org.jaxfam.orbit.IntegratorBenchmark
+
+Reference output (Apple M-series, 2026; wall-clock time will vary by machine, but the energy
+figures are bit-for-bit reproducible given the fixed seed):
+
+    name         N0 Nfinal           final energy       relDrift         ms
+    Euler1      200    200      -7.9323112986e+32   6.111428e-07      372.1
+    RK2         200    200      -7.9323161464e+32  -6.104485e-14      504.7
+    RK4         200    200      -7.9323161464e+32   6.685864e-14      824.5
+    RKK4        200    200      -7.9323161464e+32   3.488277e-14      825.3
+
+Reading these results: Euler1's first-order error is clearly visible (~1000x worse energy drift
+than the three higher-order methods, though still small in absolute terms over only 2000 steps).
+RK2, RK4, and RKK4 all conserve energy to within a few times machine epsilon (~1e-14 relative) -
+indistinguishable from each other at this scenario's scale. RKK4's Kahan-compensated summation
+gives no measurable accuracy improvement over plain RK4 here: compensation only recovers
+precision when a step's position increment is smaller than one ULP of the running position
+total, and at this scenario's typical position/velocity/dt magnitudes the per-step increment is
+many orders of magnitude larger than that threshold, so there's essentially nothing for it to
+compensate for. Timing-wise, RKK4 costs about the same as RK4 (the extra compensation
+bookkeeping is a small fraction of the four `getStateDeriv()` calls RK4/RKK4 both make per step);
+RK2's two calls and Euler1's one scale down accordingly.
+
+Caveat: STEP_COUNT (2000) is deliberately kept below this seed's first body-to-body collision -
+empirically found at step 3000 for RK2/RK4/RKK4 (Euler1's larger error keeps it away from the
+same close encounter, at least within 5000 steps). Past that point, each integrator's own
+(however slightly) different trajectory reaches the collision at a different exact moment, so
+their body counts - and therefore their total-energy figures - stop describing the same physical
+system, and a direct numerical comparison between integrators is no longer meaningful past that
+point. `main()` still reports body count for every run and flags any mismatch, in case this
+margin is ever eroded by a future change.
+
 Bugs
 ----
