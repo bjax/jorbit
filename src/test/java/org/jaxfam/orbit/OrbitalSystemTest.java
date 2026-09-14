@@ -821,15 +821,27 @@ public class OrbitalSystemTest {
     }
 
     /**
-     * Test of setCenter method, of class OrbitalSystem.
+     * Test of getNthLargestBody method, of class OrbitalSystem - the pure-query replacement for
+     * the old (removed) setCenter()/setCenterOnNthLargest(), which used to mutate an
+     * OrbitalSystem-owned centeredBody field; view-centering is Orbit's own concern now (see
+     * OrbitalSystem.defaultCenteredBody's javadoc), so this just returns the body instead.
      */
     @Test
-    public void testSetCenter() {
-        int planetNumber = 1;
-        OrbitalSystem instance = twoBodyBalancedX;
-        instance.setCenter(planetNumber);
-        Body expectedBody = instance.bodies.get(planetNumber);
-        assertEquals(expectedBody, instance.centeredBody);
+    public void testGetNthLargestBody() {
+        OrbitalSystem instance = new OrbitalSystem();
+        instance.maxR = 10.0;
+        instance.bodies = new ArrayList<Body>(3);
+        Body small = new Body(-1.0, 0.0, 0.0, 0.0, 1.0, 1.0, Color.white(), 10);
+        Body medium = new Body(0.0, 0.0, 0.0, 0.0, 2.0, 1.0, Color.white(), 10);
+        Body large = new Body(1.0, 0.0, 0.0, 0.0, 3.0, 1.0, Color.white(), 10);
+        instance.bodies.add(medium);
+        instance.bodies.add(small);
+        instance.bodies.add(large);
+
+        assertSame(large, instance.getNthLargestBody(0));
+        assertSame(medium, instance.getNthLargestBody(1));
+        assertSame(small, instance.getNthLargestBody(2));
+        assertNull(instance.getNthLargestBody(3), "out of range - fewer than 4 bodies exist");
     }
 
     /**

@@ -106,10 +106,24 @@ public class Orbit {
                                                   pixel-sized text and histogram bars that read fine
                                                   on Mac are tiny on a high-res Windows display   */
 
-    OrbitalSystem system;                   /** model we are running           */
+    OrbitalSystem system;                   /** latest published render snapshot - read fresh
+                                                  from engine.latest() once per frame in run();
+                                                  never mutated directly once the engine has
+                                                  started (see SimulationEngine's javadoc) - any
+                                                  mutation that needs to persist goes through
+                                                  engine.submit() instead                        */
+    SimulationEngine<OrbitalSystem> engine; /** runs Propagate() on its own thread, decoupled
+                                                  from this class's GLFW-bound render/input loop -
+                                                  see SimulationEngine's javadoc                  */
     StateVector IC_vector;                  /** initial state vector           */
 
     double centerX, centerY;                /** screen zoom center coords      */
+    Body centeredBody;                      /** body everyone else is rendered relative to (null
+                                                  means [0,0]) - interactive view state Orbit owns
+                                                  itself, deliberately NOT part of OrbitalSystem
+                                                  (see its defaultCenteredBody javadoc), so panning/
+                                                  zooming/re-centering are instant and never have
+                                                  to wait on whatever thread owns the physics      */
 
     Body hoveredBody;                       /** body currently under the mouse cursor, or null */
     Body selectedBody;                      /** single body last clicked on, or null           */
@@ -174,6 +188,12 @@ public class Orbit {
         centerY = 0.0;
         applySystemDefaults();
 
+        // starts the physics thread now rather than waiting for create() - harmless even before
+        // the GLFW window exists, since Propagate() touches no GL/GLFW state, and it starts
+        // paused (running defaults false) so it just idles until 'P' is pressed
+        engine = new SimulationEngine<>(system, OrbitalSystem::snapshotForRender);
+        engine.start();
+
         // save initial conditions to STATE_FILE so R always has something valid to
         // reload, even before the user has pressed S themselves
         saveState();
@@ -189,6 +209,7 @@ public class Orbit {
      */
     private void applySystemDefaults() {
         m2pix = system.defaultM2pix;
+        centeredBody = system.defaultCenteredBody;
         if (system.defaultHighViz) {
             for (Body body : system.bodies) {
                 body.isHighlighted = true;
@@ -293,14 +314,22 @@ public class Orbit {
         resizeGL();
     }
 
-    /** double the simulation time step, speeding up how fast the system evolves */
+    /** double the simulation time step, speeding up how fast the system evolves - queued rather
+        than mutated directly, since OrbitalSystem.dt is read by the physics thread inside every
+        Propagate() call (see SimulationEngine) */
     void speedUp() {
-        OrbitalSystem.dt = 2.0 * OrbitalSystem.dt;
+        engine.submit(sys -> {
+            OrbitalSystem.dt = 2.0 * OrbitalSystem.dt;
+            return sys;
+        });
     }
 
-    /** halve the simulation time step, slowing down how fast the system evolves */
+    /** halve the simulation time step, slowing down how fast the system evolves - see speedUp() */
     void slowDown() {
-        OrbitalSystem.dt = 0.5 * OrbitalSystem.dt;
+        engine.submit(sys -> {
+            OrbitalSystem.dt = 0.5 * OrbitalSystem.dt;
+            return sys;
+        });
     }
 
     /**
@@ -348,54 +377,75 @@ public class Orbit {
     }
 
     /**
+     * 0-9's key handler: centers the view on the Nth-largest currently-existing body (by
+     * radius), rank 0 being the largest. Does nothing if fewer than rank+1 bodies currently
+     * exist - bodies are continually gained/lost to collisions and culling, so a given rank can
+     * go out of range at any time.
+     * @param rank 0 for the largest body, 1 for the second-largest, etc.
+     */
+    private void centerOnNthLargest(int rank) {
+        Body target = system.getNthLargestBody(rank);
+        if (target != null) {
+            centeredBody = target;
+        }
+    }
+
+    /**
      * move screen center point
      * centerX, centerY are in current screen pixels
      */
     void updateSystemCenter() {
-        system.setCenterXY(
+        centeredBody = OrbitalSystem.pointBody(
                 centerX/OrbitalSystem.AU2m,
                 centerY/OrbitalSystem.AU2m);
         resizeGL();
     }
 
     /**
-     * S's key handler: writes the system's CURRENT state (whatever it presently is,
-     * not necessarily its original initial conditions) to STATE_FILE, in the
-     * schema/orbital-system.schema.json format. This becomes the new checkpoint R
-     * reloads. Also called once from the constructor, so a valid file always exists
-     * even before the user presses S themselves.
+     * S's key handler: queues a write of the LIVE (physics-thread-current) state - not
+     * necessarily whatever Orbit.system currently points to, which is only ever a possibly-
+     * slightly-stale published snapshot once the engine has started - to STATE_FILE, in the
+     * schema/orbital-system.schema.json format. This becomes the new checkpoint R reloads. Also
+     * called once from the constructor, so a valid file always exists even before the user
+     * presses S themselves.
      */
     void saveState() {
-        try {
-            system.saveToFile(STATE_FILE);
-        } catch (IOException ex) {
-            LOGGER.log(Level.WARNING, "Could not save state to " + STATE_FILE, ex);
-        }
+        engine.submit(sys -> {
+            try {
+                sys.saveToFile(STATE_FILE);
+            } catch (IOException ex) {
+                LOGGER.log(Level.WARNING, "Could not save state to " + STATE_FILE, ex);
+            }
+            return sys;
+        });
     }
 
     /**
-     * R's key handler: reloads the system from STATE_FILE (as last written by
-     * saveState()) and pauses it, replacing the old in-memory
-     * OrbitalSystem.resetToIC() behavior. Pausing (rather than immediately running)
-     * gives a chance to inspect/select bodies in the reloaded state before it starts
-     * evolving. Since this discards the old OrbitalSystem object wholesale, any
-     * hover/selection referencing its bodies is cleared first to avoid dangling
-     * references into a system that's no longer displayed.
+     * R's key handler: queues a reload of the system from STATE_FILE (as last written by
+     * saveState()) and pauses it, replacing the old in-memory OrbitalSystem.resetToIC()
+     * behavior. Pausing (rather than immediately running) gives a chance to inspect/select
+     * bodies in the reloaded state before it starts evolving. Since this discards the old
+     * OrbitalSystem object wholesale, any hover/selection referencing its bodies is cleared
+     * immediately (not queued - this is Orbit's own UI state, not physics state) to avoid
+     * dangling references into a system that's about to stop being displayed; the render loop
+     * will keep showing the old system for at most one more physics-thread cycle, until the
+     * queued replacement actually lands.
      */
     void reloadFromFile() {
-        OrbitalSystem loaded;
-        try {
-            loaded = OrbitalSystem.loadFromFile(STATE_FILE);
-        } catch (IOException | RuntimeException ex) {
-            LOGGER.log(Level.WARNING, "Could not reload state from " + STATE_FILE, ex);
-            return;
-        }
-        system = loaded;
+        engine.submit(sys -> {
+            try {
+                return OrbitalSystem.loadFromFile(STATE_FILE);
+            } catch (IOException | RuntimeException ex) {
+                LOGGER.log(Level.WARNING, "Could not reload state from " + STATE_FILE, ex);
+                return sys;
+            }
+        });
         hoveredBody = null;
         selectedBody = null;
         binHoveredBodies = List.of();
         setSystemCenterZeroZero();
         run = false;
+        engine.setRunning(false);
     }
 
     /**
@@ -426,7 +476,10 @@ public class Orbit {
      *                 orbit (Shift-C), CIRCULARIZE_PARTIAL_FRACTION for a partial one (plain C)
      */
     void circularizeAllBodies(double fraction) {
-        system.circularizeAllAboutCenterOfMass(fraction);
+        engine.submit(sys -> {
+            sys.circularizeAllAboutCenterOfMass(fraction);
+            return sys;
+        });
     }
 
     /**
@@ -483,7 +536,7 @@ public class Orbit {
 
         // HIT_RADIUS_PIX (not the render-only 1px minR glRender() clamps to) so tiny/zoomed-out
         // bodies stay hoverable/clickable without making their rendered dot any bigger
-        Body hit = system.findBodyAt(worldX, worldY, (float) (HIT_RADIUS_PIX / m2pix));
+        Body hit = system.findBodyAt(worldX, worldY, (float) (HIT_RADIUS_PIX / m2pix), centeredBody);
         if (hit != hoveredBody) {
             if (hoveredBody != null) {
                 hoveredBody.hovered = false;
@@ -636,7 +689,7 @@ public class Orbit {
             case GLFW_KEY_UP:     shiftUp();              break;
             case GLFW_KEY_DOWN:   shiftDown();            break;
             case GLFW_KEY_HOME:   setSystemCenterZeroZero(); break;
-            case GLFW_KEY_P:      run = !run;             break;
+            case GLFW_KEY_P:      run = !run; engine.setRunning(run); break;
             case GLFW_KEY_C:      circularizeAllBodies((mods & GLFW_MOD_SHIFT) != 0
                                           ? 1.0 : CIRCULARIZE_PARTIAL_FRACTION);          break;
             case GLFW_KEY_R:      reloadFromFile();       break;
@@ -645,16 +698,16 @@ public class Orbit {
             case GLFW_KEY_H:      showHistogram = !showHistogram; break;
             case GLFW_KEY_SLASH:  if ((mods & GLFW_MOD_SHIFT) != 0) { showHelp = !showHelp; } break;
             case GLFW_KEY_TAB:    shiftSelection((mods & GLFW_MOD_SHIFT) == 0); break;
-            case GLFW_KEY_0:      system.setCenterOnNthLargest(0);    break;
-            case GLFW_KEY_1:      system.setCenterOnNthLargest(1);    break;
-            case GLFW_KEY_2:      system.setCenterOnNthLargest(2);    break;
-            case GLFW_KEY_3:      system.setCenterOnNthLargest(3);    break;
-            case GLFW_KEY_4:      system.setCenterOnNthLargest(4);    break;
-            case GLFW_KEY_5:      system.setCenterOnNthLargest(5);    break;
-            case GLFW_KEY_6:      system.setCenterOnNthLargest(6);    break;
-            case GLFW_KEY_7:      system.setCenterOnNthLargest(7);    break;
-            case GLFW_KEY_8:      system.setCenterOnNthLargest(8);    break;
-            case GLFW_KEY_9:      system.setCenterOnNthLargest(9);    break;
+            case GLFW_KEY_0:      centerOnNthLargest(0);    break;
+            case GLFW_KEY_1:      centerOnNthLargest(1);    break;
+            case GLFW_KEY_2:      centerOnNthLargest(2);    break;
+            case GLFW_KEY_3:      centerOnNthLargest(3);    break;
+            case GLFW_KEY_4:      centerOnNthLargest(4);    break;
+            case GLFW_KEY_5:      centerOnNthLargest(5);    break;
+            case GLFW_KEY_6:      centerOnNthLargest(6);    break;
+            case GLFW_KEY_7:      centerOnNthLargest(7);    break;
+            case GLFW_KEY_8:      centerOnNthLargest(8);    break;
+            case GLFW_KEY_9:      centerOnNthLargest(9);    break;
         }
     }
 
@@ -662,8 +715,11 @@ public class Orbit {
     void run() {
         while (!glfwWindowShouldClose(window)
                 && glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS) {
+            // pick up whatever the physics thread has most recently published (see
+            // SimulationEngine) - Propagate() itself no longer runs on this thread at all, so
+            // rendering/input stay responsive regardless of how expensive a physics step is
+            system = engine.latest();
             glfwPollEvents();
-            if (run) update();
             render();
             glfwSwapBuffers(window);
         }
@@ -791,6 +847,9 @@ public class Orbit {
      * Close everything
      */
     void destroy() {
+        if (engine != null) {
+            engine.stop();
+        }
         if (trueTypeFont != null) {
             trueTypeFont.destroy();
         }
@@ -866,13 +925,6 @@ public class Orbit {
     }
 
     /**
-     * Move the model one step ahead in time
-     */
-    public void update() {
-        system.Propagate();
-    }
-
-    /**
      * Draw the solar system at a given scale
      */
     public void render() {
@@ -897,7 +949,7 @@ public class Orbit {
         glClear(GL_COLOR_BUFFER_BIT);
         glLoadIdentity();
         glColor3f(1.0f, 1.0f, 1.0f); // white
-        system.glRender( (float) (1.0/m2pix) );
+        system.glRender( (float) (1.0/m2pix), centeredBody );
         error = glGetError();
         if (error != 0) {
             throw new RuntimeException();
@@ -1030,8 +1082,8 @@ public class Orbit {
      *            frame and shares it with buildSelectionInfoText() too)
      */
     private void drawSelectedBodyEllipse(Ellipse fit) {
-        double centerX = (system.centeredBody != null) ? system.centeredBody.getX() : 0.0;
-        double centerY = (system.centeredBody != null) ? system.centeredBody.getY() : 0.0;
+        double centerX = (centeredBody != null) ? centeredBody.getX() : 0.0;
+        double centerY = (centeredBody != null) ? centeredBody.getY() : 0.0;
 
         double cosA = Math.cos(fit.angle());
         double sinA = Math.sin(fit.angle());
@@ -1073,8 +1125,8 @@ public class Orbit {
      * panning, zooming), rather than sitting in a fixed screen corner.
      */
     private float[] selectionInfoAnchor(Body body) {
-        double cx = (system.centeredBody != null) ? system.centeredBody.getX() : 0.0;
-        double cy = (system.centeredBody != null) ? system.centeredBody.getY() : 0.0;
+        double cx = (centeredBody != null) ? centeredBody.getX() : 0.0;
+        double cy = (centeredBody != null) ? centeredBody.getY() : 0.0;
         double bodyScreenX = (body.getX() - cx) * m2pix;
         double bodyScreenY = (body.getY() - cy) * m2pix;
 

@@ -85,8 +85,10 @@ public class OrbitalSystemJsonTest {
         assertNull(loadedUnnamed.getName());
         assertEquals(unnamed.getX(), loadedUnnamed.getX(), pct * OrbitalSystem.AU2m);
 
-        // loadFromFile() defaults the view to the first body
-        assertSame(loadedNamed, loaded.centeredBody);
+        // loadFromFile() suggests the first body as a default view center - actual interactive
+        // view-centering is Orbit's own concern now, not OrbitalSystem's (see
+        // OrbitalSystem.defaultCenteredBody's javadoc)
+        assertSame(loadedNamed, loaded.defaultCenteredBody);
     }
 
     @Test

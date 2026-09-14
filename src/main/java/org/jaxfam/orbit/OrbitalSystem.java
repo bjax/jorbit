@@ -54,7 +54,14 @@ public class OrbitalSystem implements DynamicSys {
     boolean enforce_R_limit;   /** should we cull escapees?   */
 
     ArrayList<Body> bodies;    /** the planets and stars are stored here */
-    Body centeredBody;         /** central body in view (if null, [0,0]) */
+    Body defaultCenteredBody;  /** the body this scenario suggests starting centered on - applied
+                                    once via Orbit.applySystemDefaults(), analogous to
+                                    defaultM2pix/defaultHighViz/defaultShowHistogram. NOT updated
+                                    as the view is panned/zoomed/re-centered thereafter - that's
+                                    interactive view state, which Orbit owns itself (its own
+                                    centeredBody field) precisely so panning/zooming/centering
+                                    stay instant and don't need to round-trip through whatever
+                                    thread owns this OrbitalSystem                              */
     double time;               /** current time for model    */
     int trailDecimation;       /** space between trail pts   */
     Integrator integrator;     /** integrator object         */
@@ -99,6 +106,17 @@ public class OrbitalSystem implements DynamicSys {
 
         // have each body update it's internal state vector
         this.loadStateVector(nextState);
+
+        // record each body's position for its trail - this used to happen inside glRender(),
+        // which implicitly assumed render() ran at the same cadence as Propagate(); that stopped
+        // holding once physics moved onto its own thread (SimulationEngine), decoupled from the
+        // render loop entirely, so trail recording moved here - simulation state, not a
+        // rendering concern
+        if (time % (trailDecimation * OrbitalSystem.dt) < 1.0) {
+            for (Body body : bodies) {
+                body.recordPosition(time);
+            }
+        }
 
         // cull bodies that have 'escaped' system in two passes
         // first one identifies 'escapees'; second removes them from list
@@ -239,7 +257,7 @@ public class OrbitalSystem implements DynamicSys {
             system.bodies.add(body);
         }
         if (!system.bodies.isEmpty()) {
-            system.centeredBody = system.bodies.get(0);
+            system.defaultCenteredBody = system.bodies.get(0);
         }
         return system;
     }
@@ -306,37 +324,29 @@ public class OrbitalSystem implements DynamicSys {
 
 
     /**
-     * center about a given planet body, by index number
-     * @param planetNumber Planet to center about
-     */
-    public void setCenter(int planetNumber) {
-        centeredBody = bodies.get(planetNumber);
-    }
-
-    /**
-     * Centers the view on the Nth-largest currently-existing body (by
-     * radius), rank 0 being the largest. Does nothing if fewer than rank+1
-     * bodies currently exist - bodies are continually gained/lost to
-     * collisions and culling, so a given rank can go out of range at any
-     * time.
+     * The Nth-largest currently-existing body (by radius), rank 0 being the largest - a pure
+     * query, unlike the old setCenterOnNthLargest(), since centering is now Orbit's own
+     * (render-thread-owned) view state rather than something this class tracks; see
+     * defaultCenteredBody's javadoc for why. Bodies are continually gained/lost to collisions
+     * and culling, so a given rank can go out of range at any time.
      * @param rank 0 for the largest body, 1 for the second-largest, etc.
+     * @return the body at that rank, or null if fewer than rank+1 bodies currently exist
      */
-    public void setCenterOnNthLargest(int rank) {
+    public Body getNthLargestBody(int rank) {
         List<Body> sortedAscending = getBodiesSortedBySize();
         int index = sortedAscending.size() - 1 - rank; // largest is last in ascending order
-        if (index >= 0) {
-            centeredBody = sortedAscending.get(index);
-        }
+        return (index >= 0) ? sortedAscending.get(index) : null;
     }
 
     /**
-     * Record the center point-of-view of the system
-     * @param X_AU set the X position of the center
-     * @param Y_AU set the Y position of the center
+     * Builds a zero-mass, zero-velocity "point" Body at the given position, for use as a view
+     * center that isn't actually any real body (e.g. Orbit's Home key, which re-centers on the
+     * origin rather than any particular body).
+     * @param X_AU X position of the point, AU
+     * @param Y_AU Y position of the point, AU
      */
-    public void setCenterXY(double X_AU, double Y_AU) {
-        // replace any previous center coordinates with a new fake body
-        centeredBody = new Body(X_AU, Y_AU, 0., 0., 1.0, 1.0, Color.black(),0);
+    static Body pointBody(double X_AU, double Y_AU) {
+        return new Body(X_AU, Y_AU, 0., 0., 1.0, 1.0, Color.black(), 0);
     }
 
     /**
@@ -555,16 +565,48 @@ public class OrbitalSystem implements DynamicSys {
 
 
     /**
-     * Draw each body on screen; record their position
+     * Draw each body on screen
      * @param minR  minimum radius for disks
+     * @param centeredBody the body to draw everyone else relative to (Orbit's own, interactively
+     *                     panned/zoomed/re-centered view state - see defaultCenteredBody's
+     *                     javadoc), or null to center on [0,0]
      */
-    public void glRender(float minR) {
+    public void glRender(float minR, Body centeredBody) {
         for (Body body : bodies) {
             body.glRender(true, minR, centeredBody);
-            if (time % (trailDecimation * SolarSystem.dt) < 1.0) {
-                body.recordPosition(time);
-            }
         }
+    }
+
+    /**
+     * A shallow copy for publishing to the render thread - see SimulationEngine's javadoc for
+     * the full reasoning. Copies every scalar/config field by value, and a freshly-copied
+     * bodies list (same Body objects by reference, not deep-copied). The fresh list container
+     * is what actually matters for safety: it means the render thread's iteration (glRender(),
+     * findBodyAt(), the size histogram, mouse hit-testing) never races the physics thread's own
+     * structural mutations to its own list (culling escapees, merging collided bodies) on the
+     * very next step, which would otherwise risk a ConcurrentModificationException - or worse -
+     * on a plain shared ArrayList. Individual Body objects are deliberately still shared, not
+     * deep-copied: a body's own scalar fields (X/Y/U/V, its TrailingPath) can in principle be
+     * read here while the physics thread is already mutating them again for the next step, but
+     * that's accepted as a bounded, purely cosmetic risk (at most one frame's slightly-off dot
+     * or trail point, self-correcting the next frame) - deep-copying every field of every body
+     * (trails especially, potentially thousands of points each) every single step would be
+     * real, unaffordable cost at the thousands-of-bodies scale this exists for.
+     */
+    OrbitalSystem snapshotForRender() {
+        OrbitalSystem copy = new OrbitalSystem();
+        copy.pathLength = this.pathLength;
+        copy.maxR = this.maxR;
+        copy.enforce_R_limit = this.enforce_R_limit;
+        copy.bodies = new ArrayList<>(this.bodies);
+        copy.defaultCenteredBody = this.defaultCenteredBody;
+        copy.time = this.time;
+        copy.trailDecimation = this.trailDecimation;
+        copy.defaultM2pix = this.defaultM2pix;
+        copy.defaultHighViz = this.defaultHighViz;
+        copy.colorByOrbitShape = this.colorByOrbitShape;
+        copy.defaultShowHistogram = this.defaultShowHistogram;
+        return copy;
     }
 
     /**
@@ -577,9 +619,10 @@ public class OrbitalSystem implements DynamicSys {
      * @param worldX X, relative to centeredBody (0 if none), in meters
      * @param worldY Y, relative to centeredBody (0 if none), in meters
      * @param minR   minimum on-screen disk radius, matching the minR passed to glRender()
+     * @param centeredBody the same view-center glRender() was called with
      * @return the closest body whose (possibly minR-clamped) disk contains the point, or null
      */
-    public Body findBodyAt(double worldX, double worldY, float minR) {
+    public Body findBodyAt(double worldX, double worldY, float minR, Body centeredBody) {
         double centerX = (centeredBody != null) ? centeredBody.getX() : 0.0;
         double centerY = (centeredBody != null) ? centeredBody.getY() : 0.0;
 

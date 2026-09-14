@@ -69,7 +69,7 @@ class TriaxSystem extends OrbitalSystem {
 
         dt = 3000.0;
         trailDecimation = 2; /* how many points to skip when remembering path */
-        centeredBody = bodies.get(0);
+        defaultCenteredBody = bodies.get(0);
 
         // the triangle's vertices sit exactly 0.01 AU from the origin (see the Y_IC_AU/cos30
         // terms above); Orbit.initial_m2pix (tuned for AU-scale systems like SolarSystem) would

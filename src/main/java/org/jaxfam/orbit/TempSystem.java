@@ -43,6 +43,6 @@ class TempSystem extends OrbitalSystem {
 
         dt = 500.0;
         trailDecimation = 2; /* how many points to skip when remembering path */
-        centeredBody = bodies.get(0);
+        defaultCenteredBody = bodies.get(0);
     }
 }

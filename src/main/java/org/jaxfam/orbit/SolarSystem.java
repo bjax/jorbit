@@ -117,12 +117,12 @@ class SolarSystem extends OrbitalSystem {
 
         dt = IC_dt;
         trailDecimation = 2; /* how many points to skip when remembering path */
-        centeredBody = Sol;
+        defaultCenteredBody = Sol;
     }
 
     /** center about sun */
     public void home() {
-        centeredBody = Sol;
+        defaultCenteredBody = Sol;
         dt = Orbit.initial_dt;
     }
 

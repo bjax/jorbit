@@ -109,7 +109,7 @@ class RandomSystem extends OrbitalSystem {
         
         dt = IC_dt;
         trailDecimation = 2; /* how many points to skip when remembering path */
-        centeredBody = bodies.get(0);
+        defaultCenteredBody = bodies.get(0);
 
         // unlike SolarSystem's traditional per-planet colors, every body here starts the same
         // plain white, so recoloring by orbit shape adds a meaningful signal instead of
