@@ -62,7 +62,7 @@ public class Orbit {
             + "+/-/scroll: zoom in/out\n"
             + "Page Up/Down: speed up/slow down\n"
             + "Left/Right/Up/Down: pan\n"
-            + "Home: recenter on origin\n"
+            + "Home: reset view (origin, default zoom)\n"
             + "0-9: center on Nth-largest body\n"
             + "Tab/Shift-Tab: next/previous body\n"
             + "V: toggle high-visibility\n"
@@ -77,7 +77,7 @@ public class Orbit {
             + "hover: highlight body\n"
             + "click: select/deselect body\n"
             + "click + drag: pan view\n"
-            + "scroll: zoom in/out";
+            + "scroll: zoom in/out about cursor";
 
     public static boolean run     = false;  /** keep-alive flag (P toggles)    */
     public static boolean showHistogram = false; /** draw size histogram (H toggles) */
@@ -302,16 +302,35 @@ public class Orbit {
     static final double SCROLL_UNITS_PER_OCTAVE = 5.0;
 
     /**
-     * Mouse scroll wheel handler: zooms in/out on the screen center, same direction sense as
-     * +/-, but scaled continuously with the scrolled amount (unlike +/-'s fixed per-press
-     * step) so a fast/long scroll zooms further than a short one.
+     * Mouse scroll wheel handler: zooms in/out about the cursor's current position - the world
+     * point under the cursor stays under the cursor as the zoom changes, so the user can zoom
+     * into an area of interest without a separate pan - rather than the screen center. Uses
+     * lastCursorX/Y (tracked by handleMouseMove(), most recently updated on whatever move event
+     * preceded this scroll) since GLFW's scroll callback doesn't report cursor position itself.
+     * Same direction sense as +/- (which still zoom on the screen center - no cursor position
+     * is implied by a keypress), but scaled continuously with the scrolled amount (unlike +/-'s
+     * fixed per-press step) so a fast/long scroll zooms further than a short one.
      * @param yoffset vertical scroll amount from GLFW's scroll callback; positive is
      *                "away from the user" (scroll up / forward), which conventionally
      *                zooms in, matching map and image-viewer scroll behavior
      */
     void handleScroll(double yoffset) {
+        double oldM2pix = m2pix;
         m2pix *= Math.pow(2.0, yoffset / SCROLL_UNITS_PER_OCTAVE);
-        resizeGL();
+
+        // Solve for the new view center (centerX/Y, in meters - see updateSystemCenter()) that
+        // keeps the cursor's world point fixed: that point, in absolute meters, is
+        // centeredBody + (cursor offset from screen center)/m2pix. Holding it constant across
+        // the m2pix change and solving for the new centeredBody position gives the correction
+        // below (zero when the cursor sits exactly at screen center, or when m2pix didn't
+        // change, matching handleMouseMove()'s own screen-to-world conversion/Y-flip).
+        double centerXm = (centeredBody != null) ? centeredBody.getX() : 0.0;
+        double centerYm = (centeredBody != null) ? centeredBody.getY() : 0.0;
+        double scaleDelta = 1.0/oldM2pix - 1.0/m2pix;
+        centerX = centerXm + (lastCursorX - DISPLAY_WIDTH  / 2.0) * scaleDelta;
+        centerY = centerYm + (DISPLAY_HEIGHT / 2.0 - lastCursorY) * scaleDelta;
+
+        updateSystemCenter();
     }
 
     /** double the simulation time step, speeding up how fast the system evolves - queued rather
@@ -374,6 +393,20 @@ public class Orbit {
     private void setSystemCenterZeroZero() {
         centerY = centerX = 0;
         updateSystemCenter();
+    }
+
+    /**
+     * Home's key handler: resets the view to what was shown initially for this scenario - its
+     * default zoom (OrbitalSystem.defaultM2pix, already applied once in applySystemDefaults()
+     * when the scenario was chosen) and centered on the origin - undoing any
+     * zooming/panning/re-centering done since. Unlike setSystemCenterZeroZero() alone (also used
+     * by R's reload and startup, which only recenter without touching zoom, since reloaded state
+     * isn't necessarily at the original scenario's scale), this explicitly restores the starting
+     * scale too.
+     */
+    private void resetViewToDefault() {
+        m2pix = system.defaultM2pix;
+        setSystemCenterZeroZero();
     }
 
     /**
@@ -688,7 +721,7 @@ public class Orbit {
             case GLFW_KEY_RIGHT:  shiftRight();           break;
             case GLFW_KEY_UP:     shiftUp();              break;
             case GLFW_KEY_DOWN:   shiftDown();            break;
-            case GLFW_KEY_HOME:   setSystemCenterZeroZero(); break;
+            case GLFW_KEY_HOME:   resetViewToDefault(); break;
             case GLFW_KEY_P:      run = !run; engine.setRunning(run); break;
             case GLFW_KEY_C:      circularizeAllBodies((mods & GLFW_MOD_SHIFT) != 0
                                           ? 1.0 : CIRCULARIZE_PARTIAL_FRACTION);          break;

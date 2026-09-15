@@ -113,7 +113,9 @@ Shift-C:: Same as c, but at 100% (true circular) speed.
 Page Up:: Double the simulation time step (speed up)
 Page Down:: Halve the simulation time step (slow down)
 Left/Right/Up/Down:: Pan the view
-Home:: Recenter the view on the origin
+Home:: Reset the view to what was shown initially for this scenario -
+centered on the origin, at the scenario's default zoom - undoing any
+zooming/panning/re-centering done since
 0-9:: Center the view on the Nth-largest body (0 = largest)
 ?:: Toggle a help panel (keyboard/mouse controls) down the left side of
 the screen. Hidden by default. If the current scenario recolors bodies
@@ -142,7 +144,10 @@ drag, like grabbing the canvas. A press only counts as a drag once the
 cursor has moved a few pixels; anything short of that on release is
 treated as a plain click/select instead.
 
-The scroll wheel zooms in/out on the screen center, same as +/-.
+The scroll wheel zooms in/out about the cursor's current position - the
+point under the cursor stays under the cursor as the zoom changes, so
+an area of interest can be zoomed into without a separate pan. +/- (no
+cursor position implied by a keypress) still zoom on the screen center.
 
 While a body is selected, a data block next to it shows its name (if
 any), size in Earth radii, and orbit shape (Elliptical/Parabolic/

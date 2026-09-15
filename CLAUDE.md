@@ -254,10 +254,14 @@ The simulation is built around a small state-space framework, independent of ren
   `glfwPollEvents()` → `update()` (advances the model via `system.Propagate()`) → `render()`, throttled
   by vsync (`glfwSwapInterval(1)`). Keyboard is handled via a `GLFWKeyCallback` (registered once, fires
   only on `GLFW_PRESS` — no key-repeat, same as the old `Keyboard.enableRepeatEvents(false)`) that
-  dispatches to `handleKeyPress()`: `P` pause/resume, `+`/`-` zoom, arrow keys pan, `Home` recenter on
-  origin, `0`-`9` center view on the Nth-largest body by radius (`OrbitalSystem.setCenterOnNthLargest`,
-  0 = largest; re-sorts `bodies` by size on every press since collisions/culling can reorder or shrink
-  the list), `S`/`R` save/reload state (see below), `Tab`/`Shift-Tab` shift selection to the next/previous
+  dispatches to `handleKeyPress()`: `P` pause/resume, `+`/`-` zoom, arrow keys pan, `Home` reset the view
+  (`Orbit.resetViewToDefault()` - origin, and the scenario's default zoom, `OrbitalSystem.defaultM2pix`;
+  unlike the plain-recenter `setSystemCenterZeroZero()` also used by `R`'s reload and startup, which
+  don't touch zoom, since reloaded state isn't necessarily at the original scenario's scale), `0`-`9`
+  center view on the Nth-largest body by radius (`Orbit.centerOnNthLargest()` →
+  `OrbitalSystem.getNthLargestBody()`, 0 = largest; re-sorts a fresh list by size on every press since
+  collisions/culling can reorder or shrink the bodies list), `S`/`R` save/reload state (see below),
+  `Tab`/`Shift-Tab` shift selection to the next/previous
   body (see `shiftSelection()` below), `V` toggle high-viz rendering (`Body.isHighlighted` — larger disk,
   brighter trail), `H` toggle the size histogram overlay, `?` (`GLFW_KEY_SLASH` with `GLFW_MOD_SHIFT` —
   the mods bitmask distinguishes it from plain `/`, the same way it distinguishes Tab from Shift-Tab)
@@ -327,16 +331,26 @@ The simulation is built around a small state-space framework, independent of ren
   still selects the hovered body; a press, 100px drag, and release pans the view by exactly the expected
   world-space delta and leaves the selection untouched.
 
-  `glfwSetScrollCallback` (→ `handleScroll(yoffset)`) zooms in/out on the screen center, same direction
-  sense as `zoomIn()`/`zoomOut()` (`+`/`-`, positive `yoffset` zooming in - scroll up/forward, the
-  conventional direction in maps and image viewers). Unlike `+`/`-`'s fixed per-press step, it scales
-  continuously with `yoffset`: `m2pix *= 2^(yoffset / SCROLL_UNITS_PER_OCTAVE)`. An initial version
-  treated every scroll callback as a full `zoomIn()`/`zoomOut()` regardless of magnitude, which was
-  fine for a discrete mouse-wheel notch but wildly (reported 5x) too sensitive on a trackpad, which
-  reports many small-magnitude scroll events per gesture rather than one per notch;
+  `glfwSetScrollCallback` (→ `handleScroll(yoffset)`) zooms in/out about the cursor's current position
+  - the world point under the cursor stays under the cursor as `m2pix` changes, so an area of interest
+  can be zoomed into without a separate pan - same direction sense as `zoomIn()`/`zoomOut()` (`+`/`-`,
+  which still zoom on the screen center, since a keypress implies no cursor position; positive `yoffset`
+  zooms in - scroll up/forward, the conventional direction in maps and image viewers). Unlike `+`/`-`'s
+  fixed per-press step, it scales continuously with `yoffset`: `m2pix *= 2^(yoffset / SCROLL_UNITS_PER_OCTAVE)`.
+  An initial version treated every scroll callback as a full `zoomIn()`/`zoomOut()` regardless of
+  magnitude, which was fine for a discrete mouse-wheel notch but wildly (reported 5x) too sensitive on
+  a trackpad, which reports many small-magnitude scroll events per gesture rather than one per notch;
   `SCROLL_UNITS_PER_OCTAVE = 5.0` spreads one full octave of zoom across 5 accumulated scroll units
   instead of 1, confirmed live (`yoffset=1.0` now moves `m2pix` by `2^(1/5)` ≈ 1.15x, not 2x; five
   such events still compound to exactly 2x, preserving the same total zoom per unit of scroll input).
+  Zooming about the cursor works by solving for the `centerX`/`centerY` (meters - see
+  `updateSystemCenter()`) that keeps the cursor's world point fixed across the `m2pix` change, using
+  `lastCursorX`/`Y` (tracked by `handleMouseMove()`, since GLFW's scroll callback doesn't report cursor
+  position itself) as the cursor location: `centerX/Y += (cursor offset from screen center) *
+  (1/oldM2pix - 1/newM2pix)`, zero correction (identical to the old center-anchored behavior) when the
+  cursor sits exactly at screen center or `m2pix` didn't change. Verified live: the world point under a
+  simulated cursor position stays fixed (to sub-micron floating-point rounding) across both a zoom-in
+  and a zoom-out, and the dead-center case leaves `centerX`/`Y` bit-for-bit unchanged.
 
   `V`'s handler (`Orbit.toggleHighlight()`) unconditionally flips
   `isHighlighted` on every body at once, regardless of whether a body is currently selected (an
