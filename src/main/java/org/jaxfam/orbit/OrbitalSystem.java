@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.Formatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.IntStream;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -349,29 +350,49 @@ public class OrbitalSystem implements DynamicSys {
         return new Body(X_AU, Y_AU, 0., 0., 1.0, 1.0, Color.black(), 0);
     }
 
+    /** below this body count, plain sequential pairwise summation (Body.addForces(), n(n-1)/2
+        pairs, each crediting both bodies from one thread) is cheaper than parallel dispatch
+        overhead - see IntegratorBenchmark's 200-body numbers, where the whole force sum already
+        runs in well under a millisecond. The parallel path below can't use that same "credit
+        both sides at once" trick - two threads doing it concurrently to two different bodies
+        that happen to be the same pair would race on the same accumulator - so it does the full
+        n^2 pairs (each one evaluated once from each side) instead; that doubled work only pays
+        for itself once there's enough of it to spread across cores. See Body.addForceFrom()'s
+        javadoc for the full reasoning, including why this is safe for collision detection too. */
+    private static final int PARALLEL_FORCE_SUM_THRESHOLD = 500;
+
     /**
      * Clears and sums the forces acting on each body by every other body
      */
     private void sumForces() {
 
-        // modified so we never do the same pair twice, by
-        // starting the inner (i) loop at one past the
-        // first body.
-
-        // two passes - one to zero forces, one to add forces
-        // first, zero forces
-
         for (Body body : bodies) {
             body.resetForces();
         }
 
-        // now add mutual attractive force to both bodies
-        for (int i = 0; i < bodies.size(); i++) {
-            Body body1 = bodies.get(i);
-            for (int j = i+1; j < bodies.size(); j++) {
-                Body body2 = bodies.get(j);
-                Body.addForces(body1, body2);
+        int n = bodies.size();
+        if (n < PARALLEL_FORCE_SUM_THRESHOLD) {
+            // modified so we never do the same pair twice, by starting the inner (j) loop at
+            // one past the first body
+            for (int i = 0; i < n; i++) {
+                Body body1 = bodies.get(i);
+                for (int j = i+1; j < n; j++) {
+                    Body.addForces(body1, bodies.get(j));
+                }
             }
+        } else {
+            // one task per body (ForkJoinPool.commonPool(), via IntStream.parallel() - already
+            // sized to the machine's core count, and shared/reused across every call rather than
+            // spinning up new threads each step), each accumulating force from every OTHER body
+            // onto itself only - see PARALLEL_FORCE_SUM_THRESHOLD/addForceFrom()'s javadoc
+            IntStream.range(0, n).parallel().forEach(i -> {
+                Body body = bodies.get(i);
+                for (int j = 0; j < n; j++) {
+                    if (j != i) {
+                        body.addForceFrom(bodies.get(j));
+                    }
+                }
+            });
         }
     }
 
