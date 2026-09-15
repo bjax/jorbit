@@ -424,6 +424,49 @@ public class Body implements DynamicSys {
         body2.addYForce( -FY );
     }
 
+    /**
+     * Adds the gravitational force this body feels from other to this body's own force
+     * accumulator only - unlike addForces() above, which credits both bodies from a single
+     * call. Used by OrbitalSystem's parallel force sum, where each thread owns a disjoint set
+     * of bodies as its sole accumulation target and must never touch another thread's body;
+     * addForces()'s "credit both sides at once" trick would be a data race if two threads did
+     * it concurrently to two different bodies that happen to be the same pair. The tradeoff:
+     * called for every ordered pair (this, other) rather than every unordered pair once, so a
+     * full parallel force sum does twice the pairwise work an equivalent sequential
+     * addForces()-based one does - worthwhile once there are enough bodies that spreading that
+     * doubled work across cores still wins.
+     * <p>
+     * Also detects (and records on this body only) proximity for collision handling, same as
+     * addForces(). Populating both bodies' joinLists independently this way - rather than only
+     * ever the lower-indexed body's, as addForces()'s call site always arranged - is safe and
+     * behaviorally equivalent: OrbitalSystem.handleImpacts() processes bodies in list order and
+     * Body.absorb() already guards against absorbing something already in that step's deletion
+     * list, so list order remains the sole tie-breaker for which body in a close pair actually
+     * absorbs the other, regardless of which side(s) detected the proximity.
+     * @param other the other body pulling on this one
+     */
+    void addForceFrom(Body other) {
+        double deltaX = other.getX() - this.getX();
+        double deltaY = other.getY() - this.getY();
+
+        double dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        double sumRadii = this.getRadius() + other.getRadius();
+        if (dist < sumRadii) { // close enough to clump together?
+            dist = sumRadii;
+            if (this.joinList == null) {
+                this.joinList = new ArrayList<>();
+            }
+            if (!this.joinList.contains(other)) {
+                this.joinList.add(other);
+            }
+        }
+
+        double Force = OrbitalSystem.Kgravity * this.getMass() * other.getMass() / (dist * dist);
+
+        this.addXForce(Force * deltaX / dist);
+        this.addYForce(Force * deltaY / dist);
+    }
+
 
     /**
      * Draw the body and it's trail relative to some central body
